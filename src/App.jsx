@@ -1,15 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import Globe, { rel } from "./Globe.jsx";
+import Globe from "./Globe.jsx";
 import { CITIES } from "./cities.js";
 import { PRAYERS, getEvents, lowerBound, DAY } from "./astro.js";
 import { loadLand } from "./land.js";
+import { CITY_NAMES_LATIN } from "./cityNames.js";
+import { I18n, LANGS, detectLang, makeI18n, useI18n } from "./i18n.js";
 
-const nf = new Intl.NumberFormat("ar-EG");
-const fmtTime = new Intl.DateTimeFormat("ar-EG", { hour: "numeric", minute: "2-digit" });
-const fmtClock = new Intl.DateTimeFormat("ar-EG", { hour: "numeric", minute: "2-digit", second: "2-digit" });
-const fmtDay = new Intl.DateTimeFormat("ar-EG", { weekday: "long", day: "numeric", month: "long" });
 const TL_SPEED = 1440; // 24h in 60s
-const norm = (s) => s.replace(/[أإآ]/g, "ا").replace(/ة/g, "ه").replace(/ى/g, "ي").replace(/\s+/g, " ").trim();
+const norm = (s) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f\u064b-\u065f\u0670]/g, "").replace(/[أإآ]/g, "ا").replace(/ة/g, "ه").replace(/ى/g, "ي").replace(/\s+/g, " ").trim();
 
 function makeClock() {
   const c = {
@@ -32,6 +30,25 @@ function savedCity() {
 }
 
 export default function App() {
+  const [lang, setLang] = useState(detectLang);
+  const i18n = useMemo(() => makeI18n(lang), [lang]);
+  useEffect(() => {
+    document.documentElement.lang = lang;
+    document.documentElement.dir = i18n.dir;
+    document.title = i18n.t.metaTitle;
+    try { localStorage.setItem("adhan-lang", lang); } catch (e) {}
+    try { history.replaceState(null, "", "#" + lang); } catch (e) {}
+  }, [lang, i18n]);
+  return (
+    <I18n.Provider value={i18n}>
+      <Main lang={lang} setLang={setLang} />
+    </I18n.Provider>
+  );
+}
+
+function Main({ lang, setLang }) {
+  const i18n = useI18n();
+  const { t: T, nf } = i18n;
   const clock = useRef(makeClock()).current;
   const [mode, setMode] = useState("live"); // live | timelapse
   const [paused, setPaused] = useState(false);
@@ -62,8 +79,8 @@ export default function App() {
   const togglePause = () => { clock.pause(!paused); setPaused(!paused); };
 
   const share = async () => {
-    try { await navigator.clipboard.writeText(location.href); setToast("اتنسخ الرابط، ابعته لصحابك"); }
-    catch (e) { setToast("انسخ الرابط من شريط العنوان"); }
+    try { await navigator.clipboard.writeText(location.href); setToast(T.copied); }
+    catch (e) { setToast(T.copyFail); }
     setTimeout(() => setToast(""), 2600);
   };
 
@@ -71,36 +88,41 @@ export default function App() {
     <div className="app">
       <div className="stars" aria-hidden="true" />
       <header className="top">
-        <div className="brand"><span className="logo">☾</span><span>الأذان حول العالم</span></div>
-        <button className="ghost" onClick={share}>شارك الصفحة</button>
+        <div className="brand"><span className="logo">☾</span><span>{T.title}</span></div>
+        <div className="top-actions">
+          <label className="lang">
+            <span aria-hidden="true">🌐</span>
+            <select value={lang} onChange={(e) => setLang(e.target.value)} aria-label={T.language}>
+              {LANGS.map((l) => (<option key={l.code} value={l.code}>{l.name}</option>))}
+            </select>
+          </label>
+          <button className="ghost" onClick={share}>{T.share}</button>
+        </div>
       </header>
 
       <section className="hero">
         <div className="hero-text">
           <span className={"pill " + (mode === "live" ? "live" : "tl")}>
-            <i />{mode === "live" ? "مباشر دلوقتي" : paused ? "متوقف" : "يوم كامل في دقيقة"}
+            <i />{mode === "live" ? T.live : paused ? T.paused : T.tlPill}
           </span>
-          <h1>الأذان ما بيسكتش<br /><em>ولا ثانية</em></h1>
-          <p className="lead">
-            الأرض بتلف، فوقت كل صلاة بيتنقّل من مدينة للي بعدها من غير ما يقف.
-            الخطوط الملوّنة على الكرة بتوريك الأذان واصل لحد فين في اللحظة دي.
-          </p>
+          <h1>{T.h1a}<br /><em>{T.h1b}</em></h1>
+          <p className="lead">{T.lead}</p>
 
           <div className="counter card">
             <div className="counter-top">
-              <span className="muted">دلوقتي بيأذّن في</span>
+              <span className="muted">{T.nowPre}</span>
               <span className="big">{nf.format(activeList.length)}</span>
-              <span className="muted">{activeList.length === 1 ? "مدينة" : "مدن"} على الخريطة</span>
+              <span className="muted">{T.nowPost(activeList.length)}</span>
             </div>
             <div className="chips">
               {activeList.slice(0, 6).map((e) => (
                 <button key={e.ci + "-" + e.t} className="chip" style={{ "--c": PRAYERS[e.pi].c }} onClick={() => setCity(e.ci)}>
-                  <i />{CITIES[e.ci][0]} <small>{PRAYERS[e.pi].n}</small>
+                  <i />{i18n.city(e.ci)} <small>{i18n.prayer(e.pi)}</small>
                 </button>
               ))}
               {activeList.length > 6 && <span className="chip more">+{nf.format(activeList.length - 6)}</span>}
               {activeList.length === 0 && nextEv && (
-                <span className="muted small">الأذان الجاي في {CITIES[nextEv.ci][0]} ({PRAYERS[nextEv.pi].n}) بعد {rel(nextEv.t - t)}</span>
+                <span className="muted small">{T.nextIn(i18n.city(nextEv.ci), i18n.prayer(nextEv.pi), i18n.inn(nextEv.t - t))}</span>
               )}
             </div>
           </div>
@@ -108,16 +130,16 @@ export default function App() {
           <div className="play card">
             <div className="play-row">
               {mode === "live" ? (
-                <button className="cta" onClick={startTimelapse}><span className="tri">▶</span> شوف يوم كامل في دقيقة</button>
+                <button className="cta" onClick={startTimelapse}><span className="tri">▶</span> {T.tlBtn}</button>
               ) : (
                 <>
-                  <button className="cta" onClick={togglePause}>{paused ? <><span className="tri">▶</span> كمّل</> : <>❚❚ وقّف</>}</button>
-                  <button className="ghost" onClick={goLive}>● رجوع للمباشر</button>
+                  <button className="cta" onClick={togglePause}>{paused ? <><span className="tri">▶</span> {T.resume}</> : <>❚❚ {T.pause}</>}</button>
+                  <button className="ghost" onClick={goLive}>● {T.backLive}</button>
                 </>
               )}
               <div className="clock">
-                <div className="clock-t">{fmtClock.format(t)}</div>
-                <div className="muted small">{fmtDay.format(t)} · بتوقيت جهازك</div>
+                <div className="clock-t">{i18n.fmtClock.format(t)}</div>
+                <div className="muted small">{i18n.fmtDay.format(t)} · {T.deviceTime}</div>
               </div>
             </div>
             {mode === "timelapse" && (
@@ -129,20 +151,20 @@ export default function App() {
         <div className="hero-globe">
           <div className="view-tabs">
             <div className="seg">
-              <button className={view === "globe" ? "on" : ""} onClick={() => setView("globe")}>كرة</button>
-              <button className={view === "flat" ? "on" : ""} onClick={() => setView("flat")}>خريطة</button>
+              <button className={view === "globe" ? "on" : ""} onClick={() => setView("globe")}>{T.globe}</button>
+              <button className={view === "flat" ? "on" : ""} onClick={() => setView("flat")}>{T.map}</button>
             </div>
             {view === "globe" && (
-              <button className={"ghost sm " + (spin ? "on" : "")} onClick={() => setSpin(!spin)}>{spin ? "⟳ بتلف لوحدها" : "⟳ اللف واقف"}</button>
+              <button className={"ghost sm " + (spin ? "on" : "")} onClick={() => setSpin(!spin)}>{"⟳ " + (spin ? T.spinOn : T.spinOff)}</button>
             )}
           </div>
           <Globe clock={clock} land={land} mode={view} autoSpin={spin} selected={city} onSelect={setCity} activeWin={activeWin} />
-          {!land && <div className="muted small center">{landFailed ? "تعذّر تحميل حدود الدول، بس المواقيت شغّالة عادي" : "بنحمّل الخريطة…"}</div>}
+          {!land && <div className="muted small center">{landFailed ? T.landFail : T.landLoading}</div>}
           <div className="legend">
-            {PRAYERS.map((p) => (<span key={p.k}><b style={{ background: p.c }} />{p.n}</span>))}
-            <span><b className="sun" />الشمس</span>
+            {PRAYERS.map((p, i) => (<span key={p.k}><b style={{ background: p.c }} />{i18n.prayer(i)}</span>))}
+            <span><b className="sun" />{T.sun}</span>
           </div>
-          <div className="muted small center">{view === "globe" ? "اسحب الكرة عشان تلفها، واضغط على أي نقطة عشان تختار المدينة" : "اضغط على أي نقطة عشان تختار المدينة"}</div>
+          <div className="muted small center">{view === "globe" ? T.dragHint : T.tapHint}</div>
         </div>
       </section>
 
@@ -152,49 +174,51 @@ export default function App() {
       </section>
 
       <section className="how">
-        <h2>إزاي ده بيحصل؟</h2>
+        <h2>{T.howTitle}</h2>
         <div className="steps">
-          <Step n="١" title="الأرض بتلف" text="كل ٢٤ ساعة الأرض بتلف لفّة كاملة، فالشمس بتبان بتعدّي على المدن واحدة ورا التانية من الشرق للغرب." icon="earth" />
-          <Step n="٢" title="الصلاة مربوطة بالشمس" text="كل صلاة ليها لحظة معيّنة في مكان الشمس: طلوع النور، أعلى نقطة، الغروب… فوقتها بيتنقّل مع الشمس." icon="sun" />
-          <Step n="٣" title="المساجد في كل حتة" text="عشان فيه مساجد في كل خطوط الطول تقريبًا، أول ما الأذان يخلص في مدينة بيبدأ في اللي بعدها، فالسلسلة ما بتتقطعش." icon="mosque" />
+          {T.steps.map(([title, text], i) => (
+            <Step key={i} n={nf.format(i + 1)} title={title} text={text} icon={["earth", "sun", "mosque"][i]} />
+          ))}
         </div>
         <div className="prayers">
-          {PRAYERS.map((p) => (
+          {PRAYERS.map((p, i) => (
             <div key={p.k} className="prayer card" style={{ "--c": p.c }}>
-              <div className="prayer-n"><i />{p.n}</div>
-              <div className="muted small">{p.d}</div>
+              <div className="prayer-n"><i />{i18n.prayer(i)}</div>
+              <div className="muted small">{T.prayerDesc[i]}</div>
             </div>
           ))}
         </div>
       </section>
 
       <section className="stats">
-        <h2>الأرقام الحقيقية</h2>
-        <p className="muted">قناة <a href="https://www.youtube.com/watch?v=hqMDzHqbeAQ" target="_blank" rel="noopener">وشلون؟</a> حسبت كل ثانية في سنة ٢٠٢٦ على أكثر من ٤٨٨ ألف مسجد، وده اللي طلع معاهم:</p>
+        <h2>{T.statsTitle}</h2>
+        <p className="muted">{T.statsPre}{T.statsPre && " "}<a href={i18n.video} target="_blank" rel="noopener">{T.channel}</a> {T.statsPost}</p>
         <div className="stat-row">
-          <Stat big="٠" label="ثانية في السنة كلها من غير أذان" />
-          <Stat big="~٤٬٠٠٠" label="مسجد بيأذّن في نفس اللحظة في المتوسط" />
-          <Stat big="+٤٦ ألف" label="مسجد أذّنوا مع بعض في ثانية واحدة في أبريل" />
-          <Stat big="+٤٨٨ ألف" label="مسجد دخلوا في الحسبة" />
+          <Stat big={nf.format(0)} label={T.stats[0]} />
+          <Stat big={"~" + nf.format(4000)} label={T.stats[1]} />
+          <Stat big={"+" + i18n.compact.format(46000)} label={T.stats[2]} />
+          <Stat big={"+" + i18n.compact.format(488000)} label={T.stats[3]} />
         </div>
       </section>
 
-      <footer>
-        المواقيت هنا محسوبة فلكيًا من مكان الشمس، وكل بلد بالطريقة الرسمية المعتمدة عندها تقريبًا، وممكن تختلف دقيقة أو اتنين عن التقويم الرسمي. على الخريطة {nf.format(CITIES.length)} مدينة كأمثلة، مش كل المساجد، والخطوط محسوبة بمعايير رابطة العالم الإسلامي.
-        حدود الدول من خريطة ECharts المفتوحة (Apache-2.0). الفكرة مأخوذة من فيديو قناة وشلون؟.
-      </footer>
+      <footer>{T.footer(nf.format(CITIES.length))}</footer>
       {toast && <div className="toast">{toast}</div>}
     </div>
   );
 }
 
 function CityCard({ city, setCity, t, byCity }) {
+  const i18n = useI18n();
+  const T = i18n.t;
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const list = useMemo(() => {
     const n = norm(q);
-    return CITIES.map((c, i) => ({ n: c[0], i })).filter((x) => !n || norm(x.n).includes(n)).sort((a, b) => a.n.localeCompare(b.n, "ar")).slice(0, 40);
-  }, [q]);
+    return CITIES.map((c, i) => ({ n: i18n.city(i), i, k: norm(c[0] + " " + CITY_NAMES_LATIN[i]) }))
+      .filter((x) => !n || x.k.includes(n))
+      .sort((a, b) => a.n.localeCompare(b.n, i18n.locale))
+      .slice(0, 40);
+  }, [q, i18n]);
   const ev = byCity[city];
   const nxIdx = ev.findIndex((e) => e.t > t);
   const nx = ev[nxIdx], pv = ev[nxIdx - 1];
@@ -209,20 +233,20 @@ function CityCard({ city, setCity, t, byCity }) {
   return (
     <div className="card city">
       <div className="card-h">
-        <h3>مدينتك</h3>
+        <h3>{T.yourCity}</h3>
         <div className="search">
           <input
-            value={open ? q : CITIES[city][0]}
+            value={open ? q : i18n.city(city)}
             onFocus={() => { setOpen(true); setQ(""); }}
             onBlur={() => setTimeout(() => setOpen(false), 150)}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="دوّر على مدينة…"
-            aria-label="اختار مدينة"
+            placeholder={T.searchPh}
+            aria-label={T.searchAria}
           />
           {open && (
             <ul className="dd">
               {list.map((x) => (<li key={x.i} onMouseDown={() => { setCity(x.i); setOpen(false); }}>{x.n}</li>))}
-              {list.length === 0 && <li className="muted">مش لاقيين المدينة دي</li>}
+              {list.length === 0 && <li className="muted">{T.notFound}</li>}
             </ul>
           )}
         </div>
@@ -234,26 +258,28 @@ function CityCard({ city, setCity, t, byCity }) {
             <circle cx="60" cy="60" r="52" className="ring-fg" style={{ stroke: PRAYERS[nx.pi].c, strokeDasharray: C, strokeDashoffset: C * (1 - frac) }} />
           </svg>
           <div className="next-txt">
-            <div className="muted small">الأذان الجاي</div>
-            <div className="next-p" style={{ color: PRAYERS[nx.pi].c }}>{PRAYERS[nx.pi].n}</div>
-            <div className="cd">{[hh, mm, ss].map((v) => String(v).padStart(2, "0")).join(":")}</div>
+            <div className="muted small">{T.nextAdhan}</div>
+            <div className="next-p" style={{ color: PRAYERS[nx.pi].c }}>{i18n.prayer(nx.pi)}</div>
+            <div className="cd"><bdi dir="ltr">{[hh, mm, ss].map((v) => String(v).padStart(2, "0")).join(":")}</bdi></div>
           </div>
         </div>
       )}
       <div className="times">
         {upcoming.map((e) => (
           <div key={e.pi} className={nx && e === nx ? "nx" : ""} style={{ "--c": PRAYERS[e.pi].c }}>
-            <div className="tn">{PRAYERS[e.pi].n}</div>
-            <div className="tv">{fmtTime.format(e.t)}</div>
+            <div className="tn">{i18n.prayer(e.pi)}</div>
+            <div className="tv">{i18n.fmtTime.format(e.t)}</div>
           </div>
         ))}
       </div>
-      <div className="muted small">المواعيد الجاية بتوقيت جهازك</div>
+      <div className="muted small">{T.upcomingNote}</div>
     </div>
   );
 }
 
 function Feed({ events, t, setCity, live }) {
+  const i18n = useI18n();
+  const T = i18n.t;
   const i1 = lowerBound(events, t + 1);
   const items = [];
   const seen = new Set();
@@ -261,22 +287,22 @@ function Feed({ events, t, setCity, live }) {
   const upcoming = events.slice(i1, i1 + 3);
   return (
     <div className="card feed">
-      <div className="card-h"><h3>على الهوا</h3><span className="muted small">{live ? "آخر الأذانات حوالين العالم" : "في الوقت المتسرّع"}</span></div>
+      <div className="card-h"><h3>{T.onAir}</h3><span className="muted small">{live ? T.onAirSub : T.onAirSubTL}</span></div>
       <ul>
         {upcoming.slice().reverse().map((e) => (
           <li key={"u" + e.ci + e.t} className="soon" onClick={() => setCity(e.ci)}>
             <i style={{ background: PRAYERS[e.pi].c }} />
-            <span className="fc">{CITIES[e.ci][0]}</span>
-            <span className="fp" style={{ color: PRAYERS[e.pi].c }}>{PRAYERS[e.pi].n}</span>
-            <span className="ft">بعد {rel(e.t - t)}</span>
+            <span className="fc">{i18n.city(e.ci)}</span>
+            <span className="fp" style={{ color: PRAYERS[e.pi].c }}>{i18n.prayer(e.pi)}</span>
+            <span className="ft">{i18n.inn(e.t - t)}</span>
           </li>
         ))}
         {items.map((e, k) => (
           <li key={e.ci + "-" + e.t} className={k === 0 ? "new" : ""} onClick={() => setCity(e.ci)}>
             <i style={{ background: PRAYERS[e.pi].c }} />
-            <span className="fc">{CITIES[e.ci][0]}</span>
-            <span className="fp" style={{ color: PRAYERS[e.pi].c }}>{PRAYERS[e.pi].n}</span>
-            <span className="ft">من {rel(t - e.t)}</span>
+            <span className="fc">{i18n.city(e.ci)}</span>
+            <span className="fp" style={{ color: PRAYERS[e.pi].c }}>{i18n.prayer(e.pi)}</span>
+            <span className="ft">{i18n.ago(t - e.t)}</span>
           </li>
         ))}
       </ul>

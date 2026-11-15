@@ -11,7 +11,8 @@
 - عدّاد للمدن اللي فيها أذان دلوقتي، وقائمة "على الهوا" بآخر الأذانات والجاية
 - زرار "يوم كامل في دقيقة" بيشغّل ٢٤ ساعة في ٦٠ ثانية
 - تختار مدينتك وتشوف عدّاد تنازلي للأذان الجاي ومواقيت الصلوات
-- واجهة عربية بالكامل وشغّالة على الموبايل
+- ست لغات: العربية، English، Français، Türkçe، Bahasa Indonesia، اردو. الموقع بيختار لغة الجهاز تلقائيًا، وتقدر تغيّرها من القائمة أو من الرابط (مثلًا `#en`)
+- شغّال على الموبايل
 
 ## التشغيل
 
@@ -47,8 +48,14 @@ src/
   astro.js     حسابات الشمس ومواقيت الصلاة
   cities.js    بيانات المدن
   land.js      تحميل حدود الدول
+  i18n.js      الترجمات واللغات
+  cityNames.js أسماء المدن بالحروف اللاتينية
   styles.css   التنسيقات
 ```
+
+## إضافة لغة جديدة
+
+ضيف اللغة في `LANGS` جوه `src/i18n.js`، وضيف قاموسها بنفس مفاتيح القواميس الموجودة.
 
 ## المصادر والشكر
 
@@ -57,4 +64,4 @@ src/
 
 ---
 
-**Adhan Around the World**: a live, interactive visualization of the call to prayer moving around the globe. Built with React, Vite, d3-geo, and Canvas.
+**Adhan Around the World**: a live, interactive visualization of the call to prayer moving around the globe, available in Arabic, English, French, Turkish, Indonesian, and Urdu. Built with React, Vite, d3-geo, and Canvas.

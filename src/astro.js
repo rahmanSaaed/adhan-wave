@@ -1,11 +1,11 @@
 import { CITIES } from "./cities.js";
 
 export const PRAYERS = [
-  { k: "fajr", n: "الفجر", c: "#6ea8ff", d: "أول ما السما تبدأ تنوّر قبل الشروق" },
-  { k: "dhuhr", n: "الظهر", c: "#ffc94d", d: "لما الشمس تعدّي أعلى نقطة في السما" },
-  { k: "asr", n: "العصر", c: "#ff9a52", d: "لما ضل أي حاجة يبقى قدّ طولها تقريبًا" },
-  { k: "maghrib", n: "المغرب", c: "#ff5f8f", d: "مع غروب الشمس على طول" },
-  { k: "isha", n: "العشاء", c: "#a98bff", d: "لما الشفق الأحمر يختفي والسما تضلم" },
+  { k: "fajr", c: "#6ea8ff" },
+  { k: "dhuhr", c: "#ffc94d" },
+  { k: "asr", c: "#ff9a52" },
+  { k: "maghrib", c: "#ff5f8f" },
+  { k: "isha", c: "#a98bff" },
 ];
 
 const METHODS = {
